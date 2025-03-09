@@ -20,6 +20,9 @@ public class PlayerMovement : MonoBehaviour
     [Tooltip("mouse/look sensitivity")]
     public float sensitivity = 50f;
     private float sensMultiplier = 1.5f;
+    [Tooltip("Mausempfindlichkeit im Scope-Modus")]
+    public float scopeSensitivity = 25f;  // Dies könnte ein Wert wie 25f oder niedriger sein
+
 
     [Header("Movement")]
     [Tooltip("additive force amount. every physics update that forward is pressed, this force (multiplied by 1/tickrate) will be added to the player.")]
@@ -74,6 +77,9 @@ public class PlayerMovement : MonoBehaviour
     private bool cancellingWall;
     private bool onWall;
     private bool cancelling;
+
+    private bool isInScope = false; // Zustandsvariable für Scope
+
 
     public static PlayerMovement Instance { get; private set; }
 
@@ -258,22 +264,78 @@ public class PlayerMovement : MonoBehaviour
     private float desiredX;
     private void Look()
     {
-        float mouseX = Input.GetAxis("Mouse X") * sensitivity * Time.fixedDeltaTime * sensMultiplier;
-        float mouseY = Input.GetAxis("Mouse Y") * sensitivity * Time.fixedDeltaTime * sensMultiplier;
+        // Berechne die Sensitivität basierend auf dem FOV der Kamera
+        float fovScale = playerCam.GetComponent<Camera>().fieldOfView / 90f; // Zugriff auf die Camera-Komponente
+        float adjustedSensitivity = sensitivity * fovScale;
 
-        //Find current look rotation
+        // Überprüfe, ob der Spieler im Scope-Modus ist und passe die Sensitivität an
+        if (isInScope)
+        {
+            adjustedSensitivity = scopeSensitivity * fovScale;  // Sensitivität im Scope reduzieren
+        }
+
+        // Hole die Mausbewegung mit der angepassten Sensitivität
+        float mouseX = Input.GetAxis("Mouse X") * adjustedSensitivity * Time.fixedDeltaTime * sensMultiplier;
+        float mouseY = Input.GetAxis("Mouse Y") * adjustedSensitivity * Time.fixedDeltaTime * sensMultiplier;
+
+        // Wende die Rotation des Spielers an
         Vector3 rot = playerCam.transform.localRotation.eulerAngles;
         desiredX = rot.y + mouseX;
 
-        //Rotate, and also make sure we dont over- or under-rotate.
+        // Begrenze die vertikale Rotation, um nicht zu weit nach oben oder unten zu schauen
         xRotation -= mouseY;
         float clamp = 89.5f;
         xRotation = Mathf.Clamp(xRotation, -clamp, clamp);
 
-        //Perform the rotations
+        // Setze die Rotation der Kamera
         playerCam.transform.localRotation = Quaternion.Euler(xRotation, desiredX, 0);
         orientation.transform.localRotation = Quaternion.Euler(0, desiredX, 0);
+
+        // Umschalten der Mauszeiger-Sperre mit der Escape-Taste
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            ToggleCursorLock();
+        }
+
+        // Wenn der Spieler ins Scope geht (z.B. mit rechter Maustaste)
+        if (Input.GetMouseButtonDown(1)) // 1 ist der Index für die rechte Maustaste
+        {
+            isInScope = true;
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
+        // Wenn der Spieler aus dem Scope kommt
+        if (Input.GetMouseButtonUp(1)) // 1 ist der Index für die rechte Maustaste
+        {
+            isInScope = false;
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
+        // Wenn der Spieler nicht im Scope ist, Mauszeiger sichtbar und freigeschaltet
+        if (!isInScope)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
     }
+
+    private void ToggleCursorLock()
+    {
+        if (Cursor.lockState == CursorLockMode.None)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+        else
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+    }
+
+
 
     private void CounterMovement(float x, float y, Vector2 mag)
     {
